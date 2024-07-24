@@ -1,12 +1,13 @@
-package cmd
+package root
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"log"
 	"os"
 	"scheduler/internal/server"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 type Config struct {

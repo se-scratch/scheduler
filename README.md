@@ -45,7 +45,7 @@ port: 7540
 dbfile: "scheduler.db"
 ```
 ## Сборка и запуск тестов
-go build  
+go build -o scheduler cmd/main.go    
 ./scheduler  
 go test ./tests  
 

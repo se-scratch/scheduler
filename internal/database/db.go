@@ -4,28 +4,17 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	_ "modernc.org/sqlite"
 	"os"
 	"path/filepath"
 	"scheduler/models"
 	"strconv"
+
+	_ "modernc.org/sqlite"
 )
 
 const (
-	tableName          string = "scheduler"
-	createDbExpression string = `
-		CREATE TABLE IF NOT EXISTS %[1]s
-		(id INTEGER PRIMARY KEY AUTOINCREMENT,
-		date VARCHAR(8) NOT NULL DEFAULT "",
-		title VARCHAR(256) NOT NULL DEFAULT "",
-		comment TEXT NOT NULL DEFAULT "",
-		repeat VARCHAR(128) NOT NULL DEFAULT "");`
-	createIndexExpression = `CREATE INDEX IF NOT EXISTS %[1]s_idx_date ON %[1]s(date);`
-	insertTaskExpression  = `INSERT INTO %s (date, title, comment, repeat) VALUES ($1, $2, $3, $4);`
-	selectTasksExpression = `SELECT * FROM %s ORDER BY %s LIMIT %d;`
-	selectTaskExpression  = `SELECT * FROM %s WHERE id = $1;`
-	updateTaskExpression  = `UPDATE %s SET date = $1, title = $2, comment = $3, repeat = $4 WHERE id = $5`
-	deleteTaskExpression  = `DELETE FROM %s WHERE id = $1;`
+	tableName string = "scheduler"
+	limit     int    = 50
 )
 
 type TaskDB struct {
@@ -55,11 +44,22 @@ func (d *TaskDB) CreateDbObject(expressions ...string) error {
 }
 
 func (d *TaskDB) Init(fileName string) error {
-	appPath, err := os.Executable()
+	const (
+		createDbExpression string = `
+		CREATE TABLE IF NOT EXISTS %[1]s
+		(id INTEGER PRIMARY KEY AUTOINCREMENT,
+		date VARCHAR(8) NOT NULL DEFAULT "",
+		title VARCHAR(256) NOT NULL DEFAULT "",
+		comment TEXT NOT NULL DEFAULT "",
+		repeat VARCHAR(128) NOT NULL DEFAULT "");`
+		createIndexExpression = `CREATE INDEX IF NOT EXISTS %[1]s_idx_date ON %[1]s(date);`
+	)
+	appPath, err := os.Getwd()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	dbPath := filepath.Join(filepath.Dir(appPath), fileName)
+
+	dbPath := filepath.Join(appPath, fileName)
 	_, err = os.Stat(dbPath)
 	if err != nil {
 		log.Printf("Creating database at %s", dbPath)
@@ -82,6 +82,8 @@ func (d *TaskDB) Init(fileName string) error {
 }
 
 func (d *TaskDB) InsertTask(task models.Task) (int, error) {
+	const insertTaskExpression = `INSERT INTO %s (date, title, comment, repeat) VALUES ($1, $2, $3, $4);`
+
 	res, err := d.DB.Exec(fmt.Sprintf(insertTaskExpression, tableName), task.Date, task.Title, task.Comment, task.Repeat)
 	if err != nil {
 		return 0, err
@@ -94,12 +96,10 @@ func (d *TaskDB) InsertTask(task models.Task) (int, error) {
 }
 
 func (d *TaskDB) SelectTasks() ([]models.Task, error) {
-	const (
-		orderField = "date"
-		limit      = 50
-	)
+	const selectTasksExpression = `SELECT id,date,title,comment,repeat FROM %s ORDER BY date LIMIT %d;`
+
 	tasks := make([]models.Task, 0)
-	res, err := d.DB.Query(fmt.Sprintf(selectTasksExpression, tableName, orderField, limit))
+	res, err := d.DB.Query(fmt.Sprintf(selectTasksExpression, tableName, limit))
 	if err != nil {
 		log.Printf("error query selecting tasks: %v\n", err)
 		return nil, err
@@ -123,7 +123,9 @@ func (d *TaskDB) SelectTasks() ([]models.Task, error) {
 }
 
 func (d *TaskDB) SelectTask(id string) (models.Task, error) {
+	const selectTaskExpression = `SELECT id,date,title,comment,repeat FROM %s WHERE id = $1;`
 	var task models.Task
+
 	if _, err := strconv.Atoi(id); err != nil {
 		return task, fmt.Errorf("wrong task id ")
 	}
@@ -136,6 +138,8 @@ func (d *TaskDB) SelectTask(id string) (models.Task, error) {
 }
 
 func (d *TaskDB) UpdateTask(task models.Task) error {
+	const updateTaskExpression = `UPDATE %s SET date = $1, title = $2, comment = $3, repeat = $4 WHERE id = $5`
+
 	res, err := d.DB.Exec(fmt.Sprintf(updateTaskExpression, tableName), task.Date, task.Title, task.Comment, task.Repeat, task.Id)
 	if err != nil {
 		return err
@@ -151,6 +155,8 @@ func (d *TaskDB) UpdateTask(task models.Task) error {
 }
 
 func (d *TaskDB) DeleteTask(id string) error {
+	const deleteTaskExpression = `DELETE FROM %s WHERE id = $1;`
+
 	res, err := d.DB.Exec(fmt.Sprintf(deleteTaskExpression, tableName), id)
 	if err != nil {
 		return err
